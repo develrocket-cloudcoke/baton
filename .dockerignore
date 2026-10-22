@@ -1,0 +1,15 @@
+.git
+**/node_modules
+**/.dev
+**/.claude
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+**/.DS_Store
+**/.env
+**/.env.*
+**/*.log
+apps/desktop-agent
+apps/desktop-macos

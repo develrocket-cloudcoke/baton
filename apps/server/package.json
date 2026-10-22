@@ -1,0 +1,49 @@
+{
+  "name": "@baton/server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "test:e2e": "prisma migrate reset --force --skip-seed && pnpm prisma:audit-install && tsx prisma/seed.ts && tsx --test test/**/*.e2e.ts",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev && pnpm prisma:audit-install",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:audit-install": "tsx src/cli/install-audit.ts",
+    "prisma:deploy": "prisma migrate deploy && pnpm prisma:audit-install",
+    "bootstrap:admin": "tsx src/cli/bootstrap-admin.ts",
+    "identity:link": "tsx src/cli/link-identity.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1126.0",
+    "@aws-sdk/s3-request-presigner": "^3.1126.0",
+    "@baton/shared": "workspace:*",
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/passport": "^10.0.3",
+    "@nestjs/platform-express": "^10.4.15",
+    "@nestjs/swagger": "^7.4.2",
+    "@prisma/client": "^6.6.0",
+    "bcrypt": "^5.1.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/node": "^22.15.3",
+    "@types/passport-jwt": "^4.0.1",
+    "@types/supertest": "^7.2.1",
+    "prisma": "^6.6.0",
+    "supertest": "^7.2.2"
+  }
+}

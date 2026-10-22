@@ -1,0 +1,513 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "mysql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum OrgRole {
+  ORG_ADMIN
+  MEMBER
+}
+
+enum MembershipRole {
+  TEAM_LEAD
+  MEMBER
+}
+
+enum AgentProvider {
+  CLAUDE_CODE
+  CODEX
+  AGY
+}
+
+enum AgentStatus {
+  ONLINE
+  OFFLINE
+  BUSY
+  DISABLED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum RequestState {
+  WITHDRAWN
+  DRAFT
+  SENT
+  DELIVERED
+  REVIEWING
+  ACCEPTED
+  RETURNED
+  REJECTED
+  READY_TO_RUN
+  RUNNING
+  RESULT_REVIEW
+  COMPLETED
+  FAILED
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum DocumentCreatorType {
+  HUMAN
+  AGENT
+}
+
+enum ArtifactKind {
+  REQUEST_ATTACHMENT
+  RESULT_ATTACHMENT
+  PATCH
+  TEST_OUTPUT
+}
+
+enum ResultReviewStatus {
+  PENDING
+  APPROVED
+  // CLO-141: 결과 검토에서 반려하면 "요청자에게 보완을 요구했다"가 된다. 선언만 돼 있고
+  // 아무 데서도 쓰이지 않던 값이라 여기서 의미를 준다.
+  CHANGES_REQUESTED
+  // CLO-141: 채택하지 않고 버렸다. 거절(종결)과 결과 폐기(재실행)가 같은 값이고,
+  // 둘의 구분은 요청 상태와 타임라인 이벤트가 한다.
+  DISCARDED
+}
+
+enum TimelineActorType {
+  HUMAN
+  DESKTOP_AGENT
+  SERVER
+}
+
+model User {
+  id                   String            @id @default(uuid())
+  email                String            @unique
+  // local 제공자 전용. 외부 신원만 가진 사용자는 null이다.
+  passwordHash         String?
+  displayName          String
+  status               UserStatus        @default(ACTIVE)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  authSessions         AuthSession[]
+  identities           UserIdentity[]
+  orgMemberships       OrgMembership[]
+  createdOrganizations Organization[]
+  createdTeamLinks     TeamLink[]
+  pairingCodes         PairingCode[]
+  memberships          TeamMembership[]
+  createdTeams         Team[]            @relation("TeamCreator")
+  agents               Agent[]
+  projects             Project[]
+  sentRequests         Request[]         @relation("RequestSender")
+  receivedRequests     Request[]         @relation("RequestRecipient")
+  revisions            RequestRevision[]
+  documents            Document[]
+  artifacts            Artifact[]
+  executions           Execution[]       @relation("ExecutionExecutor")
+  approvalDecisions    ExecutionApproval[]
+  devices              Device[]
+}
+
+model Organization {
+  id              String          @id @default(uuid())
+  name            String
+  slug            String          @unique
+  createdByUserId String
+  createdAt       DateTime        @default(now())
+  createdBy       User            @relation(fields: [createdByUserId], references: [id])
+  memberships     OrgMembership[]
+  teams           Team[]
+  teamLinks       TeamLink[]
+}
+
+model OrgMembership {
+  orgId    String
+  userId   String
+  role     OrgRole      @default(MEMBER)
+  joinedAt DateTime     @default(now())
+  org      Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([orgId, userId])
+}
+
+model TeamLink {
+  id              String       @id @default(uuid())
+  orgId           String
+  fromTeamId      String
+  toTeamId        String
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  fromTeam        Team         @relation("LinkFrom", fields: [fromTeamId], references: [id], onDelete: Cascade)
+  toTeam          Team         @relation("LinkTo", fields: [toTeamId], references: [id], onDelete: Cascade)
+  createdBy       User         @relation(fields: [createdByUserId], references: [id])
+
+  @@unique([fromTeamId, toTeamId])
+}
+
+model PairingCode {
+  id        String    @id @default(uuid())
+  userId    String
+  codeHash  String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Team {
+  id               String           @id @default(uuid())
+  orgId            String
+  org              Organization     @relation(fields: [orgId], references: [id])
+  outgoingLinks    TeamLink[]       @relation("LinkFrom")
+  incomingLinks    TeamLink[]       @relation("LinkTo")
+  name             String
+  createdByUserId  String
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdBy        User             @relation("TeamCreator", fields: [createdByUserId], references: [id])
+  memberships      TeamMembership[]
+  sentRequests     Request[]        @relation("SenderTeam")
+  receivedRequests Request[]        @relation("RecipientTeam")
+  documents        Document[]
+  artifacts        Artifact[]
+
+  @@unique([orgId, name])
+}
+
+model TeamMembership {
+  teamId   String
+  userId   String
+  role     MembershipRole @default(MEMBER)
+  joinedAt DateTime       @default(now())
+  team     Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+}
+
+model Device {
+  platform String?
+  osVersion String?
+  appVersion String?
+  hostname String?
+  id           String        @id @default(uuid())
+  userId       String
+  name         String
+  tokenHash    String        @unique
+  lastSeenAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation(fields: [userId], references: [id])
+  agents       Agent[]
+  outboxEvents OutboxEvent[]
+}
+
+model Agent {
+  id          String        @id @default(uuid())
+  ownerUserId String
+  deviceId    String
+  provider    AgentProvider @default(CLAUDE_CODE)
+  capabilities Json?
+  // 데몬이 CLI 에서 직접 읽어 보고한 모델 목록 {models,defaultModel,source}.
+  // capability 와 달리 보안 상한이 없는 정보성 값이라 clamp 하지 않는다.
+  models      Json?
+  displayName String
+  status      AgentStatus   @default(OFFLINE)
+  lastSeenAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  owner       User          @relation(fields: [ownerUserId], references: [id])
+  device      Device        @relation(fields: [deviceId], references: [id])
+  projects    Project[]
+  executions  Execution[]
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  ownerUserId   String
+  agentId       String
+  displayName   String
+  localPathHint String?
+  status        ProjectStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  owner         User          @relation(fields: [ownerUserId], references: [id])
+  agent         Agent         @relation(fields: [agentId], references: [id])
+  executions    Execution[]
+}
+
+model Request {
+  id                String            @id @default(uuid())
+  senderTeamId      String
+  recipientTeamId   String
+  senderUserId      String
+  recipientUserId   String?
+  parentRequestId   String?
+  parentRevisionNo  Int?
+  parentContext     Json?
+  claimedAt         DateTime?
+  title             String
+  state             RequestState      @default(DRAFT)
+  currentRevisionNo Int               @default(1)
+  currentRevisionId String?
+  returnReason      String?           @db.Text
+  acceptedAt        DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  senderTeam        Team              @relation("SenderTeam", fields: [senderTeamId], references: [id])
+  recipientTeam     Team              @relation("RecipientTeam", fields: [recipientTeamId], references: [id])
+  sender            User              @relation("RequestSender", fields: [senderUserId], references: [id])
+  recipient         User?             @relation("RequestRecipient", fields: [recipientUserId], references: [id])
+  parent            Request?          @relation("RequestDelegations", fields: [parentRequestId], references: [id], onDelete: Restrict)
+  children          Request[]         @relation("RequestDelegations")
+  revisions         RequestRevision[]
+  artifacts         Artifact[]
+  executions        Execution[]
+  timelineEvents    TimelineEvent[]
+
+  @@index([parentRequestId])
+}
+
+model RequestRevision {
+  id                  String          @id @default(uuid())
+  requestId           String
+  revisionNo          Int
+  originalInstruction String          @db.Text
+  documentVersionIds  Json
+  artifactIds         Json
+  createdByUserId     String
+  sentAt              DateTime?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  request             Request         @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  createdBy           User            @relation(fields: [createdByUserId], references: [id])
+  executions          Execution[]
+  timelineEvents      TimelineEvent[]
+
+  @@unique([requestId, revisionNo])
+}
+
+model Document {
+  id               String            @id @default(uuid())
+  teamId           String
+  ownerUserId      String
+  name             String
+  mimeType         String            @default("text/markdown")
+  currentVersionId String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  team             Team              @relation(fields: [teamId], references: [id])
+  owner            User              @relation(fields: [ownerUserId], references: [id])
+  versions         DocumentVersion[]
+}
+
+model DocumentVersion {
+  id               String              @id @default(uuid())
+  documentId       String
+  versionNo        Int
+  contentRef       String
+  contentSha256    String
+  // Markdown 본문. 데몬(첨부 문서 다운로드)과 웹(문서 보기)이 읽는다.
+  content          String?             @db.LongText
+  createdByType    DocumentCreatorType
+  createdByUserId  String?
+  createdByAgentId String?
+  changeNote       String?             @db.Text
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  document         Document            @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNo])
+}
+
+model Artifact {
+  id          String       @id @default(uuid())
+  teamId      String
+  ownerUserId String
+  requestId   String?
+  kind        ArtifactKind
+  filename    String
+  mimeType    String
+  storageRef  String
+  sha256      String
+  sizeBytes   Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  team        Team         @relation(fields: [teamId], references: [id])
+  owner       User         @relation(fields: [ownerUserId], references: [id])
+  request     Request?     @relation(fields: [requestId], references: [id])
+}
+
+model Execution {
+  claudeSessionId String?
+  id                      String          @id @default(uuid())
+  requestId               String
+  requestRevisionId       String
+  executorUserId          String
+  agentId                 String
+  projectId               String
+  additionalInstruction   String          @db.Text
+  // 사람이 고른 모델. null 이면 데몬 환경변수 → CLI 기본값 순으로 떨어진다.
+  model                   String?
+  effectiveInstructionRef String
+  status                  ExecutionStatus @default(QUEUED)
+  startedAt               DateTime?
+  finishedAt              DateTime?
+  failureReason           String?         @db.Text
+  failureCode             String?         @db.VarChar(64)
+  previousExecutionId     String?
+  // CLO-108: 강제할 수 없는 보호를 사람이 항목별로 승인하고 시작한 실행의 기록.
+  // 승인 시점의 항목 전문을 그대로 담아 결과 화면이 나중에도 같은 문장을 보여 줄 수 있게 한다.
+  acknowledgedRisks        Json?
+  riskAcknowledgedAt       DateTime?
+  riskAcknowledgedByUserId String?
+  // CLO-110(보안 검토 M-6-1): 실행 시점의 provider·securityTier·capability 전문.
+  // 승인 항목이 0 건이어도 남긴다 — "capability 가 충분했다"와 "과대 선언으로 항목이 사라졌다"를 구분하는 유일한 단서다.
+  agentCapabilitiesSnapshot Json?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  request                 Request         @relation(fields: [requestId], references: [id])
+  requestRevision         RequestRevision @relation(fields: [requestRevisionId], references: [id])
+  executor                User            @relation("ExecutionExecutor", fields: [executorUserId], references: [id])
+  agent                   Agent           @relation(fields: [agentId], references: [id])
+  project                 Project         @relation(fields: [projectId], references: [id])
+  result                  Result?
+  timelineEvents          TimelineEvent[]
+  approvals               ExecutionApproval[]
+  outboxEvents            OutboxEvent[]
+}
+
+enum ResultKind {
+  FINAL
+  PARTIAL
+}
+
+model Result {
+  kind ResultKind @default(FINAL)
+  id                      String             @id @default(uuid())
+  executionId             String             @unique
+  summary                 String             @db.Text
+  changedFiles            Json
+  testSummary             String?            @db.Text
+  resultDocumentVersionId String?
+  artifactIds             Json
+  reviewStatus            ResultReviewStatus @default(PENDING)
+  reviewedByUserId        String?
+  reviewedAt              DateTime?
+  sentAt                  DateTime?
+  // CLO-141: 반려하면서 요청자에게 연 result.md 아티팩트 **정확히 하나**.
+  // 본문을 복사해 두지 않는 이유는 아티팩트가 sha256 주소지정이라 불변이고,
+  // Storage 인터페이스에 서버측 읽기 연산이 없기 때문이다(설계 10 §4).
+  disclosedArtifactId     String?
+  disclosedAt             DateTime?
+  disclosedByUserId       String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  execution               Execution          @relation(fields: [executionId], references: [id], onDelete: Cascade)
+}
+
+model TimelineEvent {
+  id                String            @id @default(uuid())
+  requestId         String?
+  requestRevisionId String?
+  executionId       String?
+  actorType         TimelineActorType
+  actorUserId       String?
+  agentId           String?
+  eventType         String
+  occurredAt        DateTime          @default(now())
+  payload           Json
+  request           Request?          @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  requestRevision   RequestRevision?  @relation(fields: [requestRevisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  execution         Execution?        @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([requestId, occurredAt])
+}
+
+model OutboxEvent {
+  id          String     @id @default(uuid())
+  deviceId    String
+  executionId String?
+  eventName   String
+  payload     Json
+  createdAt   DateTime   @default(now())
+  deliveredAt DateTime?
+  device      Device     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  execution   Execution? @relation(fields: [executionId], references: [id])
+
+  @@index([deviceId, createdAt])
+  @@index([createdAt, id])
+}
+
+
+enum ExecutionApprovalStatus {
+  PENDING
+  ALLOWED
+  DENIED
+  EXPIRED
+}
+
+model ExecutionApproval {
+  id              String @id @default(uuid())
+  executionId     String
+  toolName        String @db.VarChar(80)
+  detail          String @db.Text
+  reason          String @db.VarChar(500)
+  status          ExecutionApprovalStatus @default(PENDING)
+  decidedByUserId String?
+  decidedAt       DateTime?
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+  execution       Execution @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  decidedBy       User? @relation(fields: [decidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([executionId, status])
+}
+
+model UserIdentity {
+  id         String   @id @default(uuid())
+  userId     String
+  providerId String   @db.VarChar(80)
+  subject    String   @db.VarChar(255)
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, subject])
+  @@index([userId])
+}
+
+model AuthSession {
+  id           String   @id @default(uuid())
+  userId       String
+  familyId     String
+  tokenHash    String   @unique @db.VarChar(64)
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?
+  userAgent    String?  @db.VarChar(191)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}

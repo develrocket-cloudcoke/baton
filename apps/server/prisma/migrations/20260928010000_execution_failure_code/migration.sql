@@ -1,0 +1,1 @@
+ALTER TABLE `Execution` ADD COLUMN `failureCode` VARCHAR(64) NULL;

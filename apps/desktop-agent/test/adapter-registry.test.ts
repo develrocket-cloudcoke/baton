@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+import { AgentCapabilitiesSchema } from '@baton/shared';
+import { ClaudeCodeAdapter } from '../src/adapter/claude-code/adapter';
+import { registrationCapabilities } from '../src/adapter/interface';
+import { AgentAdapterRegistry } from '../src/adapter/registry';
+import { Daemon } from '../src/daemon';
+import { LocalShellServices } from '../src/services/shell-services';
+import { LocalSettingsStore } from '../src/settings/store';
+import { fakeClaudePath, hookCommand, makeProject, postJson, startFakeServer, tmpDir, waitFor } from './helpers';
+
+test('registry: provider 선택·중복/미등록 거부·독립 러너·서버 capability 계약', async () => {
+  const adapter = new ClaudeCodeAdapter({ hook: hookCommand(), claudePath: '/missing/baton-claude' });
+  const registry = new AgentAdapterRegistry([adapter]);
+  assert.equal(registry.get('CLAUDE_CODE'), adapter);
+  assert.throws(() => registry.register(adapter), /중복/);
+  assert.throws(() => registry.get('CODEX'), /등록되지 않은/);
+  assert.deepEqual(AgentCapabilitiesSchema.parse(registrationCapabilities(adapter)), registrationCapabilities(adapter));
+  const first = adapter.createRunner();
+  const second = adapter.createRunner();
+  first.cancel(0);
+  assert.equal(first.isCancelled, true);
+  assert.equal(second.isCancelled, false);
+  assert.equal((await adapter.detect()).available, false);
+});
+
+test('Phase 1 fake-server: pairing → 실행/업로드 → 취소 → 추가 작업 resume', { timeout: 60_000 }, async () => {
+  const home = tmpDir('phase1-home');
+  const project = makeProject(tmpDir('phase1-project'));
+  const log: string[] = [];
+  const fake = await startFakeServer({ log: (line) => log.push(line) });
+  const store = new LocalSettingsStore(home);
+  store.apply({ serverUrl: fake.url(), projectPath: project, deviceName: 'phase1-test' });
+  const daemon = new Daemon({ providers: ['CLAUDE_CODE'], services: new LocalShellServices(store), home, hook: hookCommand(), claudePath: fakeClaudePath, heartbeatIntervalMs: 200 });
+  const previousMode = process.env.FAKE_CLAUDE_MODE;
+  try {
+    delete process.env.FAKE_CLAUDE_MODE;
+    await daemon.start();
+    await daemon.pair('BATON-PAIR-123');
+    await waitFor(() => log.some((line) => line.startsWith('SSE_CONNECTED')));
+    const first = await postJson(`${fake.url()}/__test/command`, { title: 'add 버그 수정', originalInstruction: 'add()를 고쳐 주세요' });
+    await waitFor(() => fake.state.results.has(first.executionId), 20_000);
+    const firstResult = fake.state.results.get(first.executionId);
+    assert.equal(firstResult.status, 'SUCCEEDED');
+    assert.equal(firstResult.artifactIds.length, 3);
+    assert.deepEqual(firstResult.changedFiles, ['src/add.js']);
+    await waitFor(() => daemon.currentState === 'connected');
+    process.env.FAKE_CLAUDE_MODE = 'hang';
+    const cancelled = await postJson(`${fake.url()}/__test/command`, { title: '취소할 작업' });
+    await waitFor(() => fake.state.statuses.some((s: any) => s.executionId === cancelled.executionId && s.phase === 'started'));
+    await postJson(`${fake.url()}/__test/cancel`, { executionId: cancelled.executionId, requestId: cancelled.requestId, reason: '회귀 검증' });
+    await waitFor(() => daemon.currentState === 'connected');
+    assert.equal(fake.state.results.has(cancelled.executionId), false);
+    delete process.env.FAKE_CLAUDE_MODE;
+    const resumed = await postJson(`${fake.url()}/__test/follow-up`, { previousExecutionId: first.executionId, followUpInstruction: '음수 덧셈 테스트를 추가해 주세요' });
+    await waitFor(() => fake.state.results.has(resumed.executionId), 20_000);
+    const result = fake.state.results.get(resumed.executionId);
+    assert.equal(result.status, 'SUCCEEDED');
+    assert.equal(result.claudeSessionId, firstResult.claudeSessionId);
+    assert.deepEqual(result.changedFiles, ['test/add.test.mjs']);
+    assert.equal(result.artifactIds.length, 3);
+    const manifest = JSON.parse(fs.readFileSync(path.join(home, 'executions', resumed.executionId, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.resumeFallback, undefined);
+    assert.equal(manifest.resumedFrom, firstResult.claudeSessionId);
+    const agent = [...fake.state.agents.values()][0];
+    const expected = registrationCapabilities(new ClaudeCodeAdapter({ hook: hookCommand() }));
+    assert.deepEqual(agent.capabilities, expected);
+    await daemon.sendHeartbeat();
+    assert.deepEqual(fake.state.heartbeats.at(-1).capabilities, expected);
+    log.push(`VERIFIED pairing, registration capabilities, progress, 3 artifacts, cancellation, resume session=${result.claudeSessionId}, current-round diff`);
+  } finally {
+    if (previousMode === undefined) delete process.env.FAKE_CLAUDE_MODE;
+    else process.env.FAKE_CLAUDE_MODE = previousMode;
+    await daemon.shutdown();
+    await fake.close();
+    process.stderr.write(log.join('\n') + '\n');
+  }
+});

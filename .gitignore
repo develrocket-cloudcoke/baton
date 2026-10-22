@@ -1,0 +1,27 @@
+node_modules/
+.turbo/
+dist/
+.next/
+.build/
+build/
+*.log
+.env
+.env.*
+!.env.example
+poc/**/run.*/
+poc/**/tmp/
+poc/menubar/.build/
+poc/menubar/build/
+.DS_Store
+.dev/
+
+# PoC/데몬 로컬 상태 파일 (디바이스 토큰 포함)
+poc/**/.e2e/
+.baton-*device.json
+**/.baton-*device.json
+
+# Next.js 빌드 캐시
+*.tsbuildinfo
+
+# 워커 검증 로그 (커밋 대상 아님)
+apps/desktop-agent/test/e2e-logs/

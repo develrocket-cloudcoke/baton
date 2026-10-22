@@ -1,0 +1,850 @@
+[
+  {
+    "policy": {
+      "repository_edit": "allow",
+      "deployment_apply": "deny",
+      "network_outbound": "deny",
+      "outside_write": "deny",
+      "shell_execution": "allow"
+    },
+    "args": [
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-hook-events",
+      "--max-turns",
+      "7",
+      "--model",
+      "model",
+      "--permission-mode",
+      "acceptEdits",
+      "--permission-prompts",
+      "none",
+      "--settings",
+      "/fixture/settingsPath",
+      "--append-system-prompt-file",
+      "/fixture/systemAppendPath",
+      "--add-dir",
+      "/fixture/inputDir",
+      "/fixture/outputDir",
+      "--allowedTools",
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash",
+      "--disallowedTools",
+      "Task",
+      "WebFetch",
+      "WebSearch",
+      "--max-budget-usd",
+      "3",
+      "--resume",
+      "session"
+    ],
+    "settings": {
+      "permissions": {
+        "deny": [
+          "Read(///fixture/home/.aws)",
+          "Read(///fixture/home/.aws/credentials)",
+          "Read(///fixture/home/.aws/config)",
+          "Read(///fixture/home/.ssh)",
+          "Read(///fixture/home/.kube)",
+          "Read(///fixture/home/.kube/config)",
+          "Read(///fixture/home/.netrc)",
+          "Read(///fixture/home/.docker)",
+          "Read(///fixture/home/.docker/config.json)",
+          "Read(///fixture/home/.baton/device-token)",
+          "Read(///fixture/home/.baton/config.json)",
+          "WebFetch",
+          "WebSearch",
+          "Bash(aws *)",
+          "Bash(terraform apply *)",
+          "Bash(helm install *)",
+          "Bash(helm upgrade *)"
+        ],
+        "disableBypassPermissionsMode": "disable",
+        "additionalDirectories": [
+          "/fixture/inputDir",
+          "/fixture/outputDir"
+        ]
+      },
+      "sandbox": {
+        "enabled": true,
+        "autoAllowBashIfSandboxed": true,
+        "failIfUnavailable": true,
+        "network": {
+          "strictAllowlist": true,
+          "allowedDomains": []
+        },
+        "filesystem": {
+          "denyRead": [
+            "/fixture/home/.aws",
+            "/fixture/home/.aws/credentials",
+            "/fixture/home/.aws/config",
+            "/fixture/home/.ssh",
+            "/fixture/home/.kube",
+            "/fixture/home/.kube/config",
+            "/fixture/home/.netrc",
+            "/fixture/home/.docker",
+            "/fixture/home/.docker/config.json",
+            "/fixture/home/.baton/device-token",
+            "/fixture/home/.baton/config.json"
+          ]
+        },
+        "credentials": {
+          "files": [
+            {
+              "path": "/fixture/home/.aws",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/credentials",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.netrc",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker/config.json",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/device-token",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/config.json",
+              "mode": "deny"
+            }
+          ]
+        }
+      },
+      "hooks": {
+        "SessionStart": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook canary --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PreToolUse": [
+          {
+            "matcher": "Bash|Edit|Write|NotebookEdit|MultiEdit|Read|Grep|Glob",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook pretool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PostToolUse": [
+          {
+            "matcher": "Edit|Write|NotebookEdit|MultiEdit|Bash",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook posttool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "hook": {
+      "writableRoots": [
+        "/fixture/project",
+        "/fixture/outputDir"
+      ],
+      "allowOutsideWrite": false,
+      "denyReadPaths": [
+        "/fixture/home/.aws",
+        "/fixture/home/.aws/credentials",
+        "/fixture/home/.aws/config",
+        "/fixture/home/.ssh",
+        "/fixture/home/.kube",
+        "/fixture/home/.kube/config",
+        "/fixture/home/.netrc",
+        "/fixture/home/.docker",
+        "/fixture/home/.docker/config.json",
+        "/fixture/home/.baton/device-token",
+        "/fixture/home/.baton/config.json"
+      ],
+      "denyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b",
+        "(^|[\\s;&|])kubectl\\s+(apply|delete|patch|edit|scale|rollout|create|replace|label|annotate|cordon|drain|taint|exec|port-forward)\\b",
+        "(^|[\\s;&|])helm\\s+(install|upgrade|uninstall|rollback)\\b",
+        "(^|[\\s;&|])terraform\\s+(apply|destroy)\\b",
+        "(^|[\\s;&|])aws\\s",
+        "(^|[\\s;&|])gcloud\\s",
+        "(^|[\\s;&|])az\\s"
+      ],
+      "hardDenyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b"
+      ],
+      "readOnlyShell": false,
+      "hookLog": "/fixture/hookEventsPath",
+      "canaryPath": "/fixture/canaryPath"
+    }
+  },
+  {
+    "policy": {
+      "repository_edit": "deny",
+      "deployment_apply": "deny",
+      "network_outbound": "deny",
+      "outside_write": "deny",
+      "shell_execution": "deny"
+    },
+    "args": [
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-hook-events",
+      "--max-turns",
+      "7",
+      "--model",
+      "model",
+      "--permission-mode",
+      "default",
+      "--permission-prompts",
+      "none",
+      "--settings",
+      "/fixture/settingsPath",
+      "--append-system-prompt-file",
+      "/fixture/systemAppendPath",
+      "--add-dir",
+      "/fixture/inputDir",
+      "/fixture/outputDir",
+      "--allowedTools",
+      "Read",
+      "Glob",
+      "Grep",
+      "--disallowedTools",
+      "Task",
+      "WebFetch",
+      "WebSearch",
+      "Bash",
+      "--max-budget-usd",
+      "3",
+      "--resume",
+      "session"
+    ],
+    "settings": {
+      "permissions": {
+        "deny": [
+          "Read(///fixture/home/.aws)",
+          "Read(///fixture/home/.aws/credentials)",
+          "Read(///fixture/home/.aws/config)",
+          "Read(///fixture/home/.ssh)",
+          "Read(///fixture/home/.kube)",
+          "Read(///fixture/home/.kube/config)",
+          "Read(///fixture/home/.netrc)",
+          "Read(///fixture/home/.docker)",
+          "Read(///fixture/home/.docker/config.json)",
+          "Read(///fixture/home/.baton/device-token)",
+          "Read(///fixture/home/.baton/config.json)",
+          "WebFetch",
+          "WebSearch",
+          "Bash(aws *)",
+          "Bash(terraform apply *)",
+          "Bash(helm install *)",
+          "Bash(helm upgrade *)",
+          "Edit",
+          "Write",
+          "NotebookEdit",
+          "Bash"
+        ],
+        "disableBypassPermissionsMode": "disable",
+        "additionalDirectories": [
+          "/fixture/inputDir",
+          "/fixture/outputDir"
+        ]
+      },
+      "sandbox": {
+        "enabled": true,
+        "autoAllowBashIfSandboxed": true,
+        "failIfUnavailable": true,
+        "network": {
+          "strictAllowlist": true,
+          "allowedDomains": []
+        },
+        "filesystem": {
+          "denyRead": [
+            "/fixture/home/.aws",
+            "/fixture/home/.aws/credentials",
+            "/fixture/home/.aws/config",
+            "/fixture/home/.ssh",
+            "/fixture/home/.kube",
+            "/fixture/home/.kube/config",
+            "/fixture/home/.netrc",
+            "/fixture/home/.docker",
+            "/fixture/home/.docker/config.json",
+            "/fixture/home/.baton/device-token",
+            "/fixture/home/.baton/config.json"
+          ]
+        },
+        "credentials": {
+          "files": [
+            {
+              "path": "/fixture/home/.aws",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/credentials",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.netrc",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker/config.json",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/device-token",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/config.json",
+              "mode": "deny"
+            }
+          ]
+        }
+      },
+      "hooks": {
+        "SessionStart": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook canary --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PreToolUse": [
+          {
+            "matcher": "Bash|Edit|Write|NotebookEdit|MultiEdit|Read|Grep|Glob",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook pretool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PostToolUse": [
+          {
+            "matcher": "Edit|Write|NotebookEdit|MultiEdit|Bash",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook posttool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "hook": {
+      "writableRoots": [
+        "/fixture/outputDir"
+      ],
+      "allowOutsideWrite": false,
+      "denyReadPaths": [
+        "/fixture/home/.aws",
+        "/fixture/home/.aws/credentials",
+        "/fixture/home/.aws/config",
+        "/fixture/home/.ssh",
+        "/fixture/home/.kube",
+        "/fixture/home/.kube/config",
+        "/fixture/home/.netrc",
+        "/fixture/home/.docker",
+        "/fixture/home/.docker/config.json",
+        "/fixture/home/.baton/device-token",
+        "/fixture/home/.baton/config.json"
+      ],
+      "denyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b",
+        "(^|[\\s;&|])kubectl\\s+(apply|delete|patch|edit|scale|rollout|create|replace|label|annotate|cordon|drain|taint|exec|port-forward)\\b",
+        "(^|[\\s;&|])helm\\s+(install|upgrade|uninstall|rollback)\\b",
+        "(^|[\\s;&|])terraform\\s+(apply|destroy)\\b",
+        "(^|[\\s;&|])aws\\s",
+        "(^|[\\s;&|])gcloud\\s",
+        "(^|[\\s;&|])az\\s"
+      ],
+      "hardDenyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b"
+      ],
+      "readOnlyShell": false,
+      "hookLog": "/fixture/hookEventsPath",
+      "canaryPath": "/fixture/canaryPath"
+    }
+  },
+  {
+    "policy": {
+      "repository_edit": "allow",
+      "deployment_apply": "deny",
+      "network_outbound": "deny",
+      "outside_write": "deny",
+      "shell_execution": "read_only"
+    },
+    "args": [
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-hook-events",
+      "--max-turns",
+      "7",
+      "--model",
+      "model",
+      "--permission-mode",
+      "acceptEdits",
+      "--permission-prompts",
+      "none",
+      "--settings",
+      "/fixture/settingsPath",
+      "--append-system-prompt-file",
+      "/fixture/systemAppendPath",
+      "--add-dir",
+      "/fixture/inputDir",
+      "/fixture/outputDir",
+      "--allowedTools",
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash",
+      "--disallowedTools",
+      "Task",
+      "WebFetch",
+      "WebSearch",
+      "--max-budget-usd",
+      "3",
+      "--resume",
+      "session"
+    ],
+    "settings": {
+      "permissions": {
+        "deny": [
+          "Read(///fixture/home/.aws)",
+          "Read(///fixture/home/.aws/credentials)",
+          "Read(///fixture/home/.aws/config)",
+          "Read(///fixture/home/.ssh)",
+          "Read(///fixture/home/.kube)",
+          "Read(///fixture/home/.kube/config)",
+          "Read(///fixture/home/.netrc)",
+          "Read(///fixture/home/.docker)",
+          "Read(///fixture/home/.docker/config.json)",
+          "Read(///fixture/home/.baton/device-token)",
+          "Read(///fixture/home/.baton/config.json)",
+          "WebFetch",
+          "WebSearch",
+          "Bash(aws *)",
+          "Bash(terraform apply *)",
+          "Bash(helm install *)",
+          "Bash(helm upgrade *)"
+        ],
+        "disableBypassPermissionsMode": "disable",
+        "additionalDirectories": [
+          "/fixture/inputDir",
+          "/fixture/outputDir"
+        ]
+      },
+      "sandbox": {
+        "enabled": true,
+        "autoAllowBashIfSandboxed": true,
+        "failIfUnavailable": true,
+        "network": {
+          "strictAllowlist": true,
+          "allowedDomains": []
+        },
+        "filesystem": {
+          "denyRead": [
+            "/fixture/home/.aws",
+            "/fixture/home/.aws/credentials",
+            "/fixture/home/.aws/config",
+            "/fixture/home/.ssh",
+            "/fixture/home/.kube",
+            "/fixture/home/.kube/config",
+            "/fixture/home/.netrc",
+            "/fixture/home/.docker",
+            "/fixture/home/.docker/config.json",
+            "/fixture/home/.baton/device-token",
+            "/fixture/home/.baton/config.json"
+          ]
+        },
+        "credentials": {
+          "files": [
+            {
+              "path": "/fixture/home/.aws",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/credentials",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.netrc",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker/config.json",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/device-token",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/config.json",
+              "mode": "deny"
+            }
+          ]
+        }
+      },
+      "hooks": {
+        "SessionStart": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook canary --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PreToolUse": [
+          {
+            "matcher": "Bash|Edit|Write|NotebookEdit|MultiEdit|Read|Grep|Glob",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook pretool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PostToolUse": [
+          {
+            "matcher": "Edit|Write|NotebookEdit|MultiEdit|Bash",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook posttool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "hook": {
+      "writableRoots": [
+        "/fixture/project",
+        "/fixture/outputDir"
+      ],
+      "allowOutsideWrite": false,
+      "denyReadPaths": [
+        "/fixture/home/.aws",
+        "/fixture/home/.aws/credentials",
+        "/fixture/home/.aws/config",
+        "/fixture/home/.ssh",
+        "/fixture/home/.kube",
+        "/fixture/home/.kube/config",
+        "/fixture/home/.netrc",
+        "/fixture/home/.docker",
+        "/fixture/home/.docker/config.json",
+        "/fixture/home/.baton/device-token",
+        "/fixture/home/.baton/config.json"
+      ],
+      "denyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b",
+        "(^|[\\s;&|])kubectl\\s+(apply|delete|patch|edit|scale|rollout|create|replace|label|annotate|cordon|drain|taint|exec|port-forward)\\b",
+        "(^|[\\s;&|])helm\\s+(install|upgrade|uninstall|rollback)\\b",
+        "(^|[\\s;&|])terraform\\s+(apply|destroy)\\b",
+        "(^|[\\s;&|])aws\\s",
+        "(^|[\\s;&|])gcloud\\s",
+        "(^|[\\s;&|])az\\s",
+        "(^|[\\s;&|])(rm|mv|cp|touch|tee|sed\\s+-i|chmod|chown|mkdir|npm\\s+install|pnpm\\s+(add|install)|pip\\s+install)\\b",
+        ">\\s*[^&]"
+      ],
+      "hardDenyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b"
+      ],
+      "readOnlyShell": true,
+      "hookLog": "/fixture/hookEventsPath",
+      "canaryPath": "/fixture/canaryPath"
+    }
+  },
+  {
+    "policy": {
+      "repository_edit": "allow",
+      "deployment_apply": "allow",
+      "network_outbound": "allow",
+      "outside_write": "allow",
+      "shell_execution": "allow"
+    },
+    "args": [
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-hook-events",
+      "--max-turns",
+      "7",
+      "--model",
+      "model",
+      "--permission-mode",
+      "acceptEdits",
+      "--permission-prompts",
+      "none",
+      "--settings",
+      "/fixture/settingsPath",
+      "--append-system-prompt-file",
+      "/fixture/systemAppendPath",
+      "--add-dir",
+      "/fixture/inputDir",
+      "/fixture/outputDir",
+      "--allowedTools",
+      "Read",
+      "Glob",
+      "Grep",
+      "Edit",
+      "Write",
+      "Bash",
+      "--disallowedTools",
+      "Task",
+      "WebFetch",
+      "WebSearch",
+      "--max-budget-usd",
+      "3",
+      "--resume",
+      "session"
+    ],
+    "settings": {
+      "permissions": {
+        "deny": [
+          "Read(///fixture/home/.aws)",
+          "Read(///fixture/home/.aws/credentials)",
+          "Read(///fixture/home/.aws/config)",
+          "Read(///fixture/home/.ssh)",
+          "Read(///fixture/home/.kube)",
+          "Read(///fixture/home/.kube/config)",
+          "Read(///fixture/home/.netrc)",
+          "Read(///fixture/home/.docker)",
+          "Read(///fixture/home/.docker/config.json)",
+          "Read(///fixture/home/.baton/device-token)",
+          "Read(///fixture/home/.baton/config.json)"
+        ],
+        "disableBypassPermissionsMode": "disable",
+        "additionalDirectories": [
+          "/fixture/inputDir",
+          "/fixture/outputDir"
+        ]
+      },
+      "sandbox": {
+        "enabled": true,
+        "autoAllowBashIfSandboxed": true,
+        "failIfUnavailable": true,
+        "network": {},
+        "filesystem": {
+          "denyRead": [
+            "/fixture/home/.aws",
+            "/fixture/home/.aws/credentials",
+            "/fixture/home/.aws/config",
+            "/fixture/home/.ssh",
+            "/fixture/home/.kube",
+            "/fixture/home/.kube/config",
+            "/fixture/home/.netrc",
+            "/fixture/home/.docker",
+            "/fixture/home/.docker/config.json",
+            "/fixture/home/.baton/device-token",
+            "/fixture/home/.baton/config.json"
+          ]
+        },
+        "credentials": {
+          "files": [
+            {
+              "path": "/fixture/home/.aws",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/credentials",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.aws/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.kube/config",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.netrc",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.docker/config.json",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/device-token",
+              "mode": "deny"
+            },
+            {
+              "path": "/fixture/home/.baton/config.json",
+              "mode": "deny"
+            }
+          ]
+        }
+      },
+      "hooks": {
+        "SessionStart": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook canary --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PreToolUse": [
+          {
+            "matcher": "Bash|Edit|Write|NotebookEdit|MultiEdit|Read|Grep|Glob",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook pretool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ],
+        "PostToolUse": [
+          {
+            "matcher": "Edit|Write|NotebookEdit|MultiEdit|Bash",
+            "hooks": [
+              {
+                "type": "command",
+                "command": "\"/fixture/node\" \"/fixture/cli\" hook posttool --policy \"/fixture/policyPath\""
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "hook": {
+      "writableRoots": [
+        "/fixture/project",
+        "/fixture/outputDir"
+      ],
+      "allowOutsideWrite": true,
+      "denyReadPaths": [
+        "/fixture/home/.aws",
+        "/fixture/home/.aws/credentials",
+        "/fixture/home/.aws/config",
+        "/fixture/home/.ssh",
+        "/fixture/home/.kube",
+        "/fixture/home/.kube/config",
+        "/fixture/home/.netrc",
+        "/fixture/home/.docker",
+        "/fixture/home/.docker/config.json",
+        "/fixture/home/.baton/device-token",
+        "/fixture/home/.baton/config.json"
+      ],
+      "denyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b"
+      ],
+      "hardDenyCommandPatterns": [
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?(add|commit|branch|tag|checkout|switch|merge|rebase|cherry-pick|revert|reset|restore|rm|mv|clean|am|stash|update-ref|symbolic-ref)\\b",
+        "\\bgit\\s+(?:[^\\n;&|]*?\\s+)?push\\b",
+        "\\bgh\\s+(?:[^\\n;&|]*?\\s+)?pr\\s+(?:[^\\n;&|]*?\\s+)?create\\b"
+      ],
+      "readOnlyShell": false,
+      "hookLog": "/fixture/hookEventsPath",
+      "canaryPath": "/fixture/canaryPath"
+    }
+  }
+]
